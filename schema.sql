@@ -1,4 +1,4 @@
--- UniLearn Hub schema 
+-- UniLearn Hub schema (draft)
 
 CREATE SCHEMA unilearn;
 SET search_path TO unilearn;
@@ -126,8 +126,7 @@ CREATE TABLE Feedback (
     submitted_at TIMESTAMP NOT NULL
 );
 
--- recipient/sender: student or staff 
--- nullable FKs + CHECK, not a type column
+-- recipient/sender: student or staff -- nullable FKs + CHECK, not a type column
 
 CREATE TABLE Notifications (
     notification_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -163,8 +162,35 @@ CREATE TABLE Messages (
     )
 );
 
--- ROLES, least privilege concept
--- USAGE needed before table grants work
+-- VIEWS -- restrict what a role can see without exposing whole tables
+
+CREATE VIEW Student_Grade_View AS
+SELECT
+    su.student_id,
+    a.assignment_id,
+    a.title AS assignment_title,
+    su.submitted_at,
+    g.marks_awarded,
+    a.max_marks,
+    g.graded_at
+FROM Submissions su
+JOIN Assignments a ON a.assignment_id = su.assignment_id
+LEFT JOIN Grades g ON g.submission_id = su.submission_id;
+-- graded_by left out on purpose -- a student doesn't need to see which
+-- staff member graded them
+
+CREATE VIEW Course_Roster_View AS
+SELECT
+    e.course_id,
+    s.student_id,
+    s.first_name,
+    s.last_name,
+    e.enrolment_date
+FROM Enrolments e
+JOIN Students s ON s.student_id = e.student_id;
+-- student email left out -- roster doesn't need it
+
+-- ROLES, least privilege -- USAGE needed before table grants work
 
 CREATE ROLE admin_role LOGIN PASSWORD 'placeholder_change_me';
 GRANT USAGE ON SCHEMA unilearn TO admin_role;
@@ -177,12 +203,16 @@ GRANT SELECT, INSERT, UPDATE ON
     Grades, Feedback, Schedule, Attendance
     TO lecturer_role;
 GRANT SELECT ON Students, Enrolments, Departments, Programs TO lecturer_role;
+GRANT SELECT ON Course_Roster_View TO lecturer_role;
 
 CREATE ROLE student_role LOGIN PASSWORD 'placeholder_change_me';
 GRANT USAGE ON SCHEMA unilearn TO student_role;
 GRANT SELECT ON Courses, Schedule, Course_Materials, Programs TO student_role;
 GRANT SELECT, INSERT ON Feedback TO student_role;
-GRANT SELECT ON Grades, Submissions, Enrolments, Attendance TO student_role;
+GRANT SELECT ON Submissions, Enrolments, Attendance TO student_role;
+GRANT SELECT ON Student_Grade_View TO student_role;
+-- Grades table itself is NOT granted -- students see marks only through
+-- Student_Grade_View, which hides graded_by
 -- no RLS yet -- this grants read on ALL rows, not just the student's own
 
 CREATE ROLE read_only_role LOGIN PASSWORD 'placeholder_change_me';

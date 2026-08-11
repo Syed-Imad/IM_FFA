@@ -1,0 +1,9 @@
+.claude/
+config/server.key
+images/15_server_key_DO_NOT_PUBLISH.png
+
+# LaTeX build artifacts
+*.aux
+*.log
+*.out
+*.toc
