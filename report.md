@@ -18,7 +18,7 @@ I resolved the many to many relationships with two junction tables, `Enrolments`
 
 `Course_Materials`, `Assignments`, `Schedule`, `Attendance`, and `Feedback` all hang off `Courses` or `Students`, recording the day to day activity the schema exists to track. I didn't store anything beyond what these features need. No scraped or inferred personal data, no column collecting more than the stated use case requires, in line with the brief's GDPR compliance expectation.
 
-Every primary key is a plain `INTEGER GENERATED ALWAYS AS IDENTITY` rather than a UUID. This system has no need for multiple write nodes, so a sequential surrogate key keeps joins smaller and easier to read at this scale. Row creation order becomes visible in the key, which I judged acceptable here.
+Every primary key is a plain `INTEGER GENERATED ALWAYS AS IDENTITY` rather than a UUID, since this system has no need for multiple write nodes. A sequential key keeps joins smaller and easier to read at this scale, at the cost of row creation order being visible in the key, which I judged acceptable here.
 
 Table screenshots below (`schema.sql`), grouped by dependency layer.
 
@@ -38,7 +38,7 @@ The schema is in 3NF. Every non key column depends on the whole primary key and 
 
 **Junction tables over multi valued columns.** A student can enrol in many courses and a course has many students. Modelling this as an array column on either side would break 1NF and make "list every student in course X" an unindexed scan. `Enrolments` and `Submissions` make both directions a plain indexed join, and their `UNIQUE (a, b)` constraints double as the business rule that a student can't enrol in the same course twice.
 
-**Nullable FK pair plus CHECK, not a subtype column.** `Notifications` needed a recipient that is a student or a staff member. The alternative was a single `recipient_type` column plus a `recipient_id` with no foreign key at all, since one foreign key can't point at two different tables. That trades a real, database enforced foreign key for an application level convention with no constraint behind it. The `CHECK` on the two nullable FKs keeps referential integrity intact and rejects rows where both are null or both are set, at the database layer rather than the application layer. `Messages` repeats the pattern for both sender and recipient.
+**Nullable FK pair plus CHECK, not a subtype column.** `Notifications` needed a recipient that is a student or a staff member. The alternative was a single `recipient_type` column plus a `recipient_id` with no foreign key at all, since one foreign key can't point at two different tables. That trades a real, database enforced foreign key for an application level convention with no constraint behind it. The `CHECK` on the two nullable FKs rejects rows where both are null or both are set, at the database layer rather than the application layer. `Messages` repeats the pattern for both sender and recipient.
 
 **`CHECK` beyond `NOT NULL`.** `Assignments.max_marks > 0`, `Grades.marks_awarded >= 0`, `Schedule.end_time > start_time`, and `Attendance.status IN (...)` all encode a rule that is true for every valid row, so I put it in the schema rather than reimplementing it in every client that writes to these tables.
 
@@ -78,13 +78,13 @@ One result is worth stating precisely. `lecturer_role` can read `Departments`, g
 
 `config/postgresql.conf` and `config/pg_hba.conf` are the two files that set the security posture. `server.crt` and `server.key` exist to support them, and `README.md` documents installation.
 
-**`postgresql.conf`.** `listen_addresses = 'localhost'` means the server accepts connections only from this machine. I assumed the app tier runs alongside it rather than reaching it over a network interface. `port = 5432` and `max_connections = 100` are left at conventional values. `ssl = on` plus `ssl_cert_file`/`ssl_key_file` turns on TLS for any connection that isn't a local Unix socket. `password_encryption = scram-sha-256` selects the stronger of PostgreSQL's two password hash schemes over the legacy MD5 default. SCRAM never sends the password itself over the wire, even encrypted, only a challenge response proof. `logging_collector`, `log_connections`, `log_disconnections`, and `log_statement = 'mod'` together log every INSERT, UPDATE, DELETE, plus every connect and disconnect event, an audit trail a shared academic database needs. `autovacuum = on` keeps dead rows from updates and deletes from accumulating on disk. `shared_buffers` and `work_mem` are left at defaults appropriate for a small install.
+**`postgresql.conf`.** `listen_addresses = 'localhost'` means the server accepts connections only from this machine, since I assumed the app tier runs alongside it rather than over a network interface. `port = 5432` and `max_connections = 100` are left at conventional values. `ssl = on` plus `ssl_cert_file`/`ssl_key_file` turns on TLS for any connection that isn't a local Unix socket. `password_encryption = scram-sha-256` selects the stronger of PostgreSQL's two password hash schemes over the legacy MD5 default, and never sends the password itself over the wire, only a challenge response proof. `logging_collector`, `log_connections`, `log_disconnections`, and `log_statement = 'mod'` together log every write plus every connect and disconnect event, an audit trail a shared academic database needs. `autovacuum = on` keeps dead rows from accumulating on disk. `shared_buffers` and `work_mem` are left at defaults appropriate for a small install.
 
 **`pg_hba.conf`.** Rules are checked top to bottom, first match wins, so ordering carries as much meaning as the individual rules. `local` (Unix socket) connections need `scram-sha-256`. Even same machine access is authenticated, not trusted implicitly. Loopback TCP (`127.0.0.1/32`, `::1/128`) must additionally use `hostssl`, not `host`. SSL is mandatory even for a connection that never leaves the machine, so encryption isn't something an administrator can skip by accident just by connecting locally. One illustrative subnet, `10.20.1.0/24`, is allowed to reach the `unilearn` database remotely, again `hostssl` only, standing in for a segmented app tier network. The last two lines reject every other address explicitly, `0.0.0.0/0` and `::/0`, rather than relying on the absence of a matching rule. The intent, that the database is not reachable from the open internet, is visible directly in the file rather than implied by default deny behaviour.
 
 **`server.crt` and `server.key`.** A self signed certificate and key pair I generated for this coursework, providing the material `ssl = on` needs. I set `server.key` to `chmod 600`, readable only by its owner, since a private key readable by other local accounts is not really private.
 
-**Rule scope, not just rule presence.** The remote rule is scoped to `hostssl unilearn all 10.20.1.0/24`, not `hostssl all all 10.20.1.0/24`. A host on that subnet still can't reach any database on the instance other than `unilearn`, which matters once more than one project shares a server. The loopback rules stay `all`, since loopback is the trusted local admin path. No plaintext `host` rule exists anywhere in the file, including for loopback. TLS is enforced by there being no alternative, not by a setting that could be left disabled.
+**Rule scope, not just rule presence.** The remote rule is scoped to `hostssl unilearn all 10.20.1.0/24`, not `hostssl all all 10.20.1.0/24`. A host on that subnet still can't reach any database other than `unilearn`, which matters once more than one project shares a server. The loopback rules stay `all`, since loopback is the trusted local admin path. No plaintext `host` rule exists anywhere in the file. TLS is enforced by there being no alternative, not by a setting that could be left disabled.
 
 **Installation**, per `config/README.md`. Copy all four files into the PostgreSQL data directory, found with `SHOW data_directory;` or the `-D` path passed to `initdb`. Run `chmod 600 server.key`. Then `pg_ctl restart -D <data_directory>` for the settings to take effect. `postgresql.conf` changes need a restart rather than a reload because several of the settings here, `listen_addresses` and `ssl_cert_file`, are only read at server start.
 
@@ -129,7 +129,7 @@ ERROR:  duplicate key value violates unique constraint "students_email_key"
 
 But calling `fn_enrol_student(1, 1)` a second time against the same already seeded data didn't error. It printed `NOTICE: Student 1 already enrolled in course 1 (enrolment_id 1)` and returned the existing row. Same story for `fn_record_attendance`. Called twice for the same session, the second call silently did nothing, and `SELECT count(*) FROM Attendance` stayed at 1. This is the schema constraint layer and the business logic layer doing their jobs differently on purpose, not a bug. A raw duplicate insert should fail hard, while a function representing a real user action should handle an already done case gracefully. One note for anyone rerunning the demo without a reset in between, `Courses`, `Schedule`, and `Assignments` carry no `UNIQUE` constraint on their seed columns, so reseeding against them duplicates rows silently rather than erroring.
 
-The script's own `set -e` didn't stop it partway through this, and that is expected, not a flaw. `set -e` aborts the bash script if a command it runs exits non zero, but each seeding block is a single `psql` invocation reading a whole heredoc of SQL statements. `psql` itself, without `ON_ERROR_STOP`, reports each failing statement and moves to the next one within that invocation, then still exits with success once the heredoc is done. That is why the five duplicate key errors printed as errors rather than killing the script, and why the run still finished and produced usable output for the rest of the demo.
+The script's own `set -e` didn't stop it partway through this, and that is expected, not a flaw. `set -e` aborts the bash script if a command exits non zero, but each seeding block is a single `psql` invocation reading a whole heredoc of SQL statements. `psql`, without `ON_ERROR_STOP`, reports each failing statement and moves to the next one within that invocation, then still exits with success once the heredoc is done. That is why the five errors printed rather than killing the script, and why the run still finished with usable output for the rest of the demo.
 
 I confirmed the full cycle was clean. `business_logic.sh`, then `IM.sql`, then `business_logic.sh` again, against a freshly reset database, produced identical output both times with zero errors, including the `fn_course_average` calls, which returned `NULL` before any grade existed and `42.00` immediately after I inserted one, in both runs.
 
@@ -137,21 +137,21 @@ None of the three functions is `SECURITY DEFINER`, so each runs with the privile
 
 ## Testing of User Journeys
 
-**A student enrols, is graded, and checks their result.** `fn_enrol_student` creates the `Enrolments` row. A lecturer later inserts a `Submissions` row and a `Grades` row against it. The student then queries `Student_Grade_View` (§1.4) and sees their mark and the assignment's `max_marks`, but not `graded_by`. A direct `SELECT` on `Grades` from the same session is rejected (§1.5), which confirms the view is the only path, not a convention a direct connection could bypass.
+**A student enrols, is graded, and checks their result.** `fn_enrol_student` creates the `Enrolments` row. A lecturer later inserts a `Submissions` row and a `Grades` row against it. The student queries `Student_Grade_View` (§1.4) and sees their mark and `max_marks`, but not `graded_by`. A direct `SELECT` on `Grades` from the same session is rejected (§1.5), confirming the view is the only path.
 
-**A lecturer records attendance across repeated sessions.** `fn_record_attendance` is called once per class. Calling it again for a session already marked does nothing rather than erroring (§3), so a lecturer resubmitting a register can't silently create duplicate rows or crash the request.
+**A lecturer records attendance across repeated sessions.** `fn_record_attendance` is called once per class. Calling it again for a session already marked does nothing rather than erroring (§3), so a resubmitted register can't create duplicate rows or crash the request.
 
 **An unauthorised or unencrypted connection is refused before it can do anything.** A plaintext TCP connection is rejected at the connection stage, before authentication runs (§2). A `read_only_role` session that does connect still cannot write (§1.5). Network and transport, then privilege, each have to pass independently for a write to happen.
 
 ## Security Design Decisions
 
-Least privilege roles (§1.4), TLS only remote access with an explicit deny all (§2), SCRAM SHA 256 hashing, and full write and connection audit logging form the core of the design, covered in §1 and §2. View based column hiding (§1.4) keeps a sensitive column out of a role's reach without per column grants, which PostgreSQL doesn't support directly. I verified every access control decision here live under `SET ROLE`, not just by reading the grant statements.
+Least privilege roles, TLS only remote access with an explicit deny all, SCRAM SHA 256 hashing, and full write and connection audit logging form the core of the design, covered in §1 and §2. View based column hiding keeps a sensitive column out of a role's reach without per column grants, which PostgreSQL doesn't support directly. I verified every access control decision live under `SET ROLE`, not just by reading the grant statements.
 
 **Known limitations, not fixed, listed on purpose.**
 
-1. No Row Level Security. `student_role`'s grant on `Student_Grade_View` covers every row, not just that student's own. Enforcing an own rows only rule needs Postgres RLS policies, which I have not built yet.
+1. No Row Level Security. `student_role`'s grant on `Student_Grade_View` covers every row, not just that student's own. Enforcing an own rows only rule needs RLS policies, not built yet.
 2. No cross table CHECK on `Grades.marks_awarded` against `Assignments.max_marks`. This needs a trigger. I left it out to keep the submitted schema simple and fully trigger free.
-3. Self signed SSL certificate. It encrypts the connection but isn't verifiable against a trusted CA the way a real deployment's certificate would be.
+3. Self signed SSL certificate. It encrypts the connection but isn't verifiable against a trusted CA.
 4. `CREATE ROLE ... PASSWORD 'placeholder_change_me'`. Every role password in `schema.sql` is a placeholder, not a real credential.
 5. `10.20.1.0/24` in `pg_hba.conf` is illustrative, standing in for a segmented app tier subnet. It is not a real deployed address range.
 
@@ -159,14 +159,13 @@ Least privilege roles (§1.4), TLS only remote access with an explicit deny all 
 
 I used AI for the following.
 
-- Ran the schema, config, and business logic scripts against a live PostgreSQL instance to check my import, constraint, privilege, and SSL claims actually held up.
-- Caught a factual error in my own privilege test notes, lecturer access to `Departments` is read only, not blocked outright as I had first written.
-- Formatted the report into LaTeX, matching the structure and style of an example report of mine.
+- Ran the scripts against a live PostgreSQL instance to check my test claims held up.
+- Caught a factual error in my privilege test notes, lecturer access to `Departments` is read only, not blocked outright.
+- Formatted the report into LaTeX, matching an example report of mine.
 - Helped me along with `business_logic.sh` and taught me bash as I went, since I had little experience with it. Also helped write the comments.
-- Debugging help, mainly on the isolated PostgreSQL instance setup used for config verification.
-- Grammar, punctuation, and phrasing edits throughout.
-- Added the section cross references between related parts of the report.
-- Mapped the schema design to the GDPR compliance point in the brief's notes.
+- Debugging help on the isolated PostgreSQL instance used for config verification.
+- Grammar, punctuation, and phrasing edits, and cut the word count down by rephrasing.
+- Added the section cross references, and mapped the schema to the GDPR point in the brief.
 
 ## Appendix: Full Code Listings
 

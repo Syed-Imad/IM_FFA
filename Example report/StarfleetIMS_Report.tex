@@ -1,0 +1,603 @@
+%========================================
+% Starfleet Academy Operations Inventory Management System - Report
+%========================================
+\documentclass[12pt,a4paper]{article}
+
+%---------- Packages ----------
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{parskip}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{titlesec}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{listings}
+\usepackage{seqsplit}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{tgschola}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+%---------- Basic formatting ----------
+\onehalfspacing
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=black,
+    urlcolor=blue!60!black,
+    citecolor=black,
+    pdfauthor={Syed Imad Uddin},
+    pdftitle={CCSE CW1}
+}
+
+%---------- Colour and section styles ----------
+\definecolor{warwickpurple}{RGB}{87, 35, 100}
+
+\titleformat{\section}
+  {\large\bfseries\color{warwickpurple}}
+  {\thesection}{1em}{}
+
+\titleformat{\subsection}
+  {\normalsize\bfseries}
+  {\thesubsection}{0.75em}{}
+
+\titleformat{\subsubsection}
+  {\normalsize\itshape}
+  {\thesubsubsection}{0.75em}{}
+
+%---------- Code listing style ----------
+\lstset{
+    basicstyle=\ttfamily,
+    keywordstyle=\bfseries\color{warwickpurple},
+    commentstyle=\itshape\color{gray},
+    stringstyle=\color{blue!60!black},
+    breaklines=true,
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{gray!40},
+    backgroundcolor=\color{gray!5},
+    numbers=none,
+    showstringspaces=false,
+    tabsize=4,
+    xleftmargin=0.5cm,
+    xrightmargin=0.5cm,
+    aboveskip=0.8em,
+    belowskip=0.8em
+}
+
+%---------- Header and footer ----------
+\pagestyle{fancy}
+\setlength{\headheight}{14pt}
+\fancyhf{}
+\lhead{\small CCSE CW1}
+\rhead{\small Starfleet Academy IMS}
+\cfoot{\small \thepage}
+
+%========================================
+\begin{document}
+
+%---------- Title Page ----------
+\begin{titlepage}
+    \thispagestyle{empty}
+    \centering
+    \vspace*{1.5cm}
+
+    \includegraphics[width=0.55\textwidth]{u_of_w_third_party_lockup_positive_rgb.jpg}\\[1.5cm]
+
+    {\Large \textbf{CCSE CW1}}\\[0.5cm]
+    {\large Starfleet Academy Operations Inventory Management System}\\[0.3cm]
+    {\large Report}\\[2cm]
+
+    {\large Software Security Coursework}\\[2cm]
+
+    \vfill
+
+    {\large \textbf{Student:} Syed Imad Uddin}\\[0.5cm]
+    {\large \today}
+
+    \vfill
+\end{titlepage}
+
+%---------- Table of Contents ----------
+\tableofcontents
+\newpage
+
+%========================================
+\section{Implementation phase}
+%========================================
+
+\subsection{Requirements}
+
+The three scenarios below are given as BDD requirements. Each asks for something specific:
+
+\begin{enumerate}
+    \item RBAC needs an identity and a decision point checking it on every relevant action, not just at login.
+    \item Inventory records need writes to be attributable and explainable later, even once the underlying data is gone.
+    \item Audit logging, ``any user performs an action'' rather than ``any write action'', is broader than the other two.
+\end{enumerate}
+
+\noindent
+\textbf{Feature:} Operations Inventory Management System for Starfleet Academy\\
+As a Starfleet administrator\\
+I want to manage the inventory of scientific resources and archival materials efficiently\\
+So that I can ensure accurate tracking, availability, and secure access across the fleet.
+
+\vspace{0.5em}
+\noindent
+\textbf{Scenario: Role-Based Access Control (RBAC)}\\
+Given different user roles (Command Officer, Cadet)\\
+When a user logs into the system\\
+Then the system should grant access based on their Starfleet clearance level\\
+And restrict unauthorised actions such as modifying inventory or accessing mission audit logs.
+
+\vspace{0.5em}
+\noindent
+\textbf{Scenario: Define and Manage Inventory Records}\\
+Given I am logged in as a Command Officer\\
+When I add, update, or remove a resource from the inventory\\
+Then the system should reflect the changes\\
+And maintain a history of modifications for audit and mission traceability.
+
+\vspace{0.5em}
+\noindent
+\textbf{Scenario: Audit Logging of System Activity}\\
+Given any user performs an action\\
+When the action is completed\\
+Then the system should log the event with stardate, user ID, and action details\\
+So that Starfleet administrators can review system usage and detect anomalies or breaches.
+
+\subsubsection{Requirements Mapping}
+
+I've mapped each scenario to the implementation and the test that proves it.
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{7.7cm} >{\raggedright\arraybackslash}p{3.7cm} @{}}
+\caption{Requirements to implementation and evidence mapping}\\
+\toprule
+\textbf{Scenario} & \textbf{Implementation} & \textbf{Evidence} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Scenario} & \textbf{Implementation} & \textbf{Evidence} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+Role-Based Access Control (RBAC) &
+\lstinline|role_required| / \lstinline|login_required| decorators (\lstinline|app.py|) gate every write route and the audit log, checked against the role stored in the signed session cookie set at login &
+\texttt{\seqsplit{test\_cadet\_blocked\_from\_add\_item}}, \texttt{\seqsplit{test\_officer\_permitted\_to\_add\_item}} \\[0.6em]
+
+Define and Manage Inventory Records &
+\lstinline|add_inventory_item| and \lstinline|inventory_item| (GET/PUT/POST/DELETE) handle create/update/remove. Removal is a soft delete via \lstinline|is_removed|. Every change writes a row through \lstinline|record_history()| into \lstinline|InventoryHistory| &
+\texttt{\seqsplit{test\_history\_recorded\_for\_create\_update\_remove}} \\[0.6em]
+
+Audit Logging of System Activity &
+\lstinline|AuditLog| model plus \lstinline|before_request| / \lstinline|after_request| hooks log every request with timestamp, user ID, and outcome (success/denied/unauthenticated/failure) &
+\texttt{\seqsplit{test\_audit\_log\_covers\_unauthenticated\_denied\_and\_success}} \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\subsection{System Overview}
+
+\subsubsection{Architecture}
+
+I built it so every request passes through the decorators and the \lstinline|before_request| / \lstinline|after_request| hooks before reaching a view function. This makes the audit log unconditional, and is why RBAC cannot be bypassed by hitting a route directly instead of going through the browser.
+
+The diagram below describes the request pipeline.
+
+\begin{figure}[H]
+\centering
+\tikzstyle{proc} = [rectangle, rounded corners, draw=warwickpurple, fill=warwickpurple!8, minimum width=3.3cm, minimum height=1cm, align=center, font=\small, inner sep=4pt]
+\tikzstyle{db} = [cylinder, shape border rotate=90, aspect=0.25, draw=warwickpurple, fill=warwickpurple!15, minimum height=2.6cm, minimum width=1.3cm, align=center, font=\small, inner sep=3pt]
+\resizebox{0.72\textwidth}{!}{%
+\begin{tikzpicture}[
+    node distance=0.9cm and 1.5cm,
+    every path/.style={draw, -{Stealth[length=2.2mm]}, thick, color=warwickpurple!70!black}
+]
+\node[proc] (browser) {Browser};
+\node[proc, below=of browser] (routes) {Flask routes\\\texttt{\footnotesize app.py}};
+\node[proc, below left=of routes] (guards) {\texttt{\footnotesize login\_required} /\\\texttt{\footnotesize role\_required}\\decorators};
+\node[proc, below right=of routes] (hooks) {\texttt{\footnotesize before\_request} /\\\texttt{\footnotesize after\_request}\\hooks};
+\node[proc, below=of guards] (views) {View functions};
+\node[db, below=of hooks] (auditlog) {AuditLog table};
+\node[proc, below left=of views] (orm) {SQLAlchemy models\\\texttt{\footnotesize models.py}};
+\node[proc, below right=of views] (history) {\texttt{\footnotesize record\_history}\\helper};
+\node[db, below=of orm] (db) {SQLite database\\\texttt{\footnotesize inventory.db}};
+\node[db, below=of history] (historytable) {InventoryHistory table};
+
+\draw (browser) -- node[right, font=\scriptsize, align=left] {HTTP request +\\session cookie} (routes);
+\draw (routes) -- (guards);
+\draw (routes) -- (hooks);
+\draw (guards) -- (views);
+\draw (hooks) -- (auditlog);
+\draw (views) -- (orm);
+\draw (views) -- (history);
+\draw (orm) -- (db);
+\draw (history) -- (historytable);
+\end{tikzpicture}%
+}
+\caption{Request pipeline architecture}
+\end{figure}
+
+\lstinline|app.py| has two layers on top of this: five helper functions (two decorators for auth, one for writing history rows, two request hooks for audit logging) and eleven route functions. Almost every route follows the same structure:
+
+\begin{enumerate}
+    \item Check the request is allowed
+    \item Read the submitted data
+    \item Validate it
+    \item Write to the database
+    \item Flash a message and redirect or return JSON
+\end{enumerate}
+
+Once that's clear for one route, the rest are the same steps with different fields, not new logic each time. The exceptions are the decorators themselves and \lstinline|/inventory/<id>|, which handles four HTTP methods in one function.
+
+\vspace{0.5em}
+\noindent\textbf{Helper functions}
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}p{8cm} @{}}
+\toprule
+\textbf{Function} & \textbf{Type} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Function} & \textbf{Type} & \textbf{Purpose} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\lstinline|login_required(f)| & Decorator & Redirects to login if no session exists \\[0.4em]
+\lstinline|role_required(*roles)| & Decorator factory & Redirects if no session, or if the session's role isn't in \lstinline|roles| \\[0.4em]
+\lstinline|record_history(item, action)| & Helper & Writes one snapshot row to \lstinline|InventoryHistory| \\[0.4em]
+\lstinline|reset_audit_outcome()| & \lstinline|before_request| hook & Resets \lstinline|g.audit_outcome| to \lstinline|"success"| at the start of every request \\[0.4em]
+\lstinline|log_request(response)| & \lstinline|after_request| hook & Writes one \lstinline|AuditLog| row per request, using whatever \lstinline|g.audit_outcome| ended up as \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\vspace{0.5em}
+\noindent\textbf{Routes}
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{4.3cm} @{}}
+\toprule
+\textbf{Function} & \textbf{Route} & \textbf{Access} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Function} & \textbf{Route} & \textbf{Access} & \textbf{Purpose} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\lstinline|home()| & GET \lstinline|/| & Public & Login page if logged out, dashboard if logged in \\[0.4em]
+\lstinline|list_inventory()| & GET \lstinline|/inventory| & Any logged in role & Lists non removed items as JSON \\[0.4em]
+\texttt{\seqsplit{inventory\_item(item\_id)}} & \seqsplit{GET/PUT/POST/DELETE} \lstinline|/inventory/<id>| & GET: any role. \seqsplit{PUT/POST/DELETE}: officer & View, update, or soft delete one item \\[0.4em]
+\texttt{\seqsplit{inventory\_item\_history(item\_id)}} & GET \lstinline|/inventory/<id>/history| & Any logged in role & Returns that item's modification history as JSON \\[0.4em]
+\lstinline|audit_log()| & GET \lstinline|/audit-log| & Officer only & Renders the audit log page \\[0.4em]
+\lstinline|login()| & POST \lstinline|/login| & Public & Authenticates and sets the session \\[0.4em]
+\lstinline|logout()| & POST \lstinline|/logout| & Any logged in role & Clears the session \\[0.4em]
+\lstinline|add_inventory_item()| & POST \lstinline|/inventory/add| & Officer only & Creates a new item \\[0.4em]
+\lstinline|add_user()| & POST \lstinline|/user/add| & Officer only & Creates a new user account \\[0.4em]
+\lstinline|temp_add_user()| & GET \lstinline|/user/temp_add| & Public (development only) & a test cadet or officer account \\[0.4em]
+\lstinline|temp_add_item()| & GET \lstinline|/item/temp_add| & Public (development only) & a test inventory item \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\subsubsection{Code stack and why}
+
+Python
+
+\begin{itemize}
+    \item Flask
+    \item SQL Alchemy
+    \item SQLite
+    \item HTML + Jinja template engine
+\end{itemize}
+
+I chose Python as it's my strongest language, versatile, and quick to spin up a small web server in, with a large library ecosystem for the API and front end.
+
+I've used SQLAlchemy as the ORM since it's the most common choice in industry, with plenty of documentation available. SQLite avoids the overhead of a live server database, since this project is local and doesn't need concurrent access from multiple users.
+
+I've opted for HTML and Jinja templating as I'm most comfortable in this stack, not what's typically used in industry, but easier to work with for a project this size than a separate front end framework would have been.
+
+I originally built login with JWT (flask-jwt-extended), the standard approach for a REST API. I switched to session cookies once building the browser GUI started, because JWT only works if the client attaches the token to every request itself, meaning JavaScript reading the token and setting a header on every fetch call. Since the GUI needed to run on plain HTML forms with no JavaScript, that was not compatible. A session cookie is sent back by the browser automatically, so switching let me drop the JavaScript layer entirely and keep the front end to just Jinja templates and forms.
+
+\subsubsection{The Models}
+
+The database has four models:
+\begin{enumerate}
+    \item \lstinline|User|
+    \item \lstinline|InventoryItems|
+    \item \lstinline|InventoryHistory|
+    \item \lstinline|AuditLog|
+\end{enumerate}
+
+\lstinline|User| stores the username, a hashed password (via werkzeug's \lstinline|generate_password_hash|, so nothing is stored in plaintext), and a role field: \lstinline|cadet| or \lstinline|command_officer|.
+
+\lstinline|InventoryItems| stores the name and quantity of a resource, plus an \lstinline|is_removed| flag. I added \lstinline|is_removed| before history or audit logging existed as a requirement, since permanently deleting a row would leave nothing for a history table to point back to. Soft deleting just flags the row instead.
+
+\lstinline|InventoryHistory| and \lstinline|AuditLog| both carry a \lstinline|user_id| linking back to \lstinline|User|, making it possible to say \textit{who} did something, not just that it happened. Rather than store a diff each time an item changes, \lstinline|InventoryHistory| stores a full snapshot after each change. This uses more storage than a diff would, but any row can be read back on its own without replaying earlier changes to work out what it looked like.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.7\textwidth]{images/record_history.png}
+\caption{\lstinline|record_history()|, the helper that writes a snapshot row}
+\end{figure}
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}p{6.5cm} @{}}
+\toprule
+\textbf{Model} & \textbf{Key fields} & \textbf{Purpose} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Model} & \textbf{Key fields} & \textbf{Purpose} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\lstinline|User| & \lstinline|id|, \lstinline|username|, \lstinline|password_hash|, \lstinline|role| & Accounts and role based access (\lstinline|cadet| / \lstinline|command_officer|) \\[0.4em]
+\lstinline|InventoryItems| & \lstinline|id|, \lstinline|name|, \lstinline|quantity|, \lstinline|is_removed| & Inventory resources. \lstinline|is_removed| is the soft delete flag \\[0.4em]
+\lstinline|InventoryHistory| & \lstinline|id|, \lstinline|item_id| (FK), \lstinline|user_id| (FK), \lstinline|action|, \lstinline|timestamp|, \lstinline|name_snapshot|, \lstinline|quantity_snapshot| & One row per create/update/remove, a full snapshot rather than a diff \\[0.4em]
+\lstinline|AuditLog| & \lstinline|id|, \lstinline|user_id| (FK, nullable), \lstinline|path|, \lstinline|method|, \lstinline|outcome|, \lstinline|timestamp| & One row per request. \lstinline|user_id| is null when the request was unauthenticated \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\subsubsection{The Routes}
+
+I split the routes into reads (any logged in role) and writes (command officer only), so the RBAC boundary sits at that read/write line rather than per route.
+
+\lstinline|/| shows the login page if nobody's logged in, or the dashboard if they are. \lstinline|/login| and \lstinline|/logout| handle authentication through the session cookie. \lstinline|/inventory| (GET) lists all non removed items to any logged in user, and \lstinline|/inventory/add| (POST) lets an officer create one.
+
+\lstinline|/inventory/<id>| is one route accepting GET, PUT, POST and DELETE, with GET open to any role and PUT/DELETE restricted to officers. It is one route rather than four because curl and Postman can send real PUT/DELETE requests, but a plain HTML form can only send GET or POST, so the edit and remove buttons both POST to the same URL, with a hidden \lstinline|_action=delete| field telling the route which one it is meant to be doing.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.6\textwidth]{images/inventory_item_route.png}
+\caption{\lstinline|inventory_item()|, the route handling all four methods}
+\end{figure}
+
+\lstinline|/inventory/<id>/history| returns an item's modification history, open to any role. \lstinline|/user/add| lets an officer create an account. \lstinline|/user/temp_add| and \lstinline|/item/temp_add| are unauthenticated development routes for seeding a test user and item, needed because once \lstinline|/user/add| requires an officer, nothing can create the first one.
+
+\lstinline|/audit-log| lists every logged action and is restricted to officers, satisfying the requirement to restrict access to mission audit logs.
+
+\subsection{Code walkthrough}
+
+\subsubsection{The Login/Role Required Decorators}
+
+A decorator takes a function as input and returns a replacement function in its place. \lstinline|login_required| and \lstinline|role_required| are applied to routes such as \lstinline|add_inventory_item| to decide whether the real route runs.
+
+The decorator runs once, at startup, when Python reads through \lstinline|app.py|. It can't check a session on every visit since no request exists yet at that point, the app hasn't started serving anything. So \lstinline|login_required| builds a second function, \lstinline|wrapper|, and returns that instead. \lstinline|wrapper| is what Flask actually calls on every request, checking session state fresh each time.
+
+If \lstinline|user_id| isn't in the session, \lstinline|wrapper| redirects to login and the real route never runs. Otherwise the real route runs as normal.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.55\textwidth]{images/login_required.png}
+\caption{\lstinline|login_required|}
+\end{figure}
+
+\lstinline|role_required| does the same check but needs to know which role, and that differs per route: \lstinline|command_officer| for adding an item, for example. It takes one extra step: \lstinline|role_required("command_officer")| builds a \lstinline|wrapper| that remembers that role, then checks \lstinline|session.get("role")| against it on every request.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.8\textwidth]{images/role_required.png}
+\caption{\lstinline|role_required|, the decorator factory}
+\end{figure}
+
+I used \lstinline|@wraps(f)| from Python's \lstinline|functools| on both decorators. Without it, every \lstinline|wrapper| function is literally named \lstinline|wrapper|, and Flask uses that name internally to tell routes apart. Two routes sharing the same decorator would look identical to Flask and crash the app on startup. \lstinline|@wraps(f)| copies the real route's name back onto \lstinline|wrapper|.
+
+Both decorators only ever trust the session, never anything the request itself claims. The session is a cookie signed by the server, so the browser can send it back but cannot edit it without the server noticing, unlike a form field or header, which is simply whatever the client typed in. The role checked always comes from that signed cookie, set at login, never from anything the client could fill in themselves.
+
+\subsection{Test cases}
+
+The 4 following areas were outlined in the user requirements and therefore have corresponding tests: login works, roles are enforced both ways, changes are tracked, and actions are logged including refusals. Real automated proof for each, rather than a manual click through I did once and did not repeat.
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}p{5.8cm} >{\raggedright\arraybackslash}p{3.5cm} @{}}
+\toprule
+\textbf{Test} & \textbf{Proves} & \textbf{Requirement} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Test} & \textbf{Proves} & \textbf{Requirement} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+\lstinline|test_login_success| / \lstinline|test_login_failure| & Accepts valid creds, rejects invalid & Auth precondition underlying RBAC \\[0.4em]
+\texttt{\seqsplit{test\_cadet\_blocked\_from\_add\_item}} / \texttt{\seqsplit{test\_officer\_permitted\_to\_add\_item}} & Roles enforced both ways, not just logged in = allowed & RBAC scenario \\[0.4em]
+\texttt{\seqsplit{test\_history\_recorded\_for\_create\_update\_remove}} & Create, update, remove lineage captured with correct snapshots each step & Inventory records / modification history scenario \\[0.4em]
+\texttt{\seqsplit{test\_audit\_log\_covers\_unauthenticated\_denied\_and\_success}} & Unauthenticated, denied, and success all logged, not just wins & Audit logging scenario \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\newpage
+%========================================
+\section{Critical Reflection}
+%========================================
+
+\subsection{How secure build practices reinforce the integrity and trustworthiness}
+
+I compiled and ran every stage against a live version of the app before considering it finished, instead of assuming it worked.
+
+The audit log shows why rechecking implementation against the original requirement matters, not just against my own plan. I had initially scoped it to only \lstinline|/login| and \lstinline|/inventory*|, but the user requirement says ``\textit{any} user performs \textit{an} action'', broader than what I had built. Separately, the RBAC scenario's line about restricting access to ``mission audit logs'' implied a route to view the log needed to exist and be protected, which it did not yet. Neither gap would have been caught by testing what already existed, only by rereading the requirement itself.
+
+Two real bugs came from writing the pytest suite, not manual testing:
+
+\begin{itemize}
+    \item \lstinline|flask.g| should reset every request, but my test fixture wrapping requests in a single app context let a value leak from one request into the next, meaning a denied action could log as a success, exactly what an audit log exists to prevent. I only found it because a test asserted the exact outcome string, not because the request did not error.
+    \item My tests were quietly writing to the real database, because Flask-SQLAlchemy fixes the database URI in place the moment \lstinline|db.init_app()| runs rather than lazily on first use, confirmed with a standalone reproduction script before trusting the fix.
+\end{itemize}
+
+Manual testing had not caught either bug.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.75\textwidth]{images/reset_audit_outcome.png}\\[0.8em]
+\includegraphics[width=0.75\textwidth]{images/log_request.png}
+\caption{The \lstinline|before_request|/\lstinline|after_request| pair behind the first bug: \lstinline|g.audit_outcome| reset on every request, then read back when logging it}
+\end{figure}
+
+Two weaknesses are worth stating plainly rather than leaving for a marker to find:
+
+\begin{itemize}
+    \item \lstinline|SECRET_KEY| is hardcoded in \lstinline|app.py| rather than read from an environment variable. This is acceptable for a project that never leaves my machine, but it would let anyone with source code access forge session cookies in a real deployment.
+    \item Sessions cannot be revoked early: a compromised account or a changed role would not take effect until that session expired or the user logged out.
+\end{itemize}
+
+\subsection{How does this system align with SSCoP}
+
+The Software Security Code of Practice (DSIT/NCSC, May 2025) targets commercial vendors selling to business customers, therefore not every principle translates onto a small internal academy system. I have mapped where the fit is an analogy rather than a literal match.
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}p{6cm} >{\raggedright\arraybackslash}p{4.3cm} @{}}
+\caption{Mapping of security requirements and features to SSCoP principles}\\
+\toprule
+\textbf{Security Requirement and Feature} & \textbf{Description} & \textbf{Mapped Principles} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{Security Requirement and Feature} & \textbf{Description} & \textbf{Mapped Principles} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+Role based access control (\lstinline|role_required|) &
+Server side, deny by default enforcement of Cadet vs Officer on every write route and the audit log &
+1.4: secure by design/default \\[0.6em]
+
+Session based authentication &
+Signed cookie via Flask's built in session mechanism, not a custom rolled scheme &
+1.1: established secure development framework \\[0.6em]
+
+Soft delete (\lstinline|is_removed|) &
+Decided upfront, before history was even a requirement, that removal should not destroy data &
+1.4: secure by design \\[0.6em]
+
+Modification history &
+Snapshot row per create/update/remove: who, when, what &
+2.2: analogy, not literal. 2.2 is about the \textit{build} environment, no build pipeline here, but same idea: traceable, attributable changes, just at the application layer \\[0.6em]
+
+Audit logging (\lstinline|before_request| / \lstinline|after_request|) &
+Every request logged with outcome, denials and unauthenticated attempts included &
+2.2: same analogy, applied to every request not just data changes \\[0.6em]
+
+pytest suite &
+6 tests gating each stage before it was considered complete &
+1.3: clear process for testing before distribution, the most direct match in this table \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\subsection{How does the IMS support or fall short of the SSCoP principles}
+
+I have gone by theme rather than principle since several principles within a theme land on the same assessment.
+
+\footnotesize
+\renewcommand{\arraystretch}{1.3}
+\begin{longtable}{@{} >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}p{10.3cm} @{}}
+\toprule
+\textbf{SSCoP theme} & \textbf{Assessment} \\
+\midrule
+\endfirsthead
+
+\toprule
+\textbf{SSCoP theme} & \textbf{Assessment} \\
+\midrule
+\endhead
+
+\bottomrule
+\endfoot
+
+1. Secure design and development &
+\textbf{Strength}: deny by default access control, tested every stage. \textbf{Gap}: no named or documented secure development framework, process was iterative and informal, not structured against a formal threat model. \\[0.6em]
+
+2. Build environment security &
+\textbf{Gap, mostly N/A}: no real build or release pipeline, locally run app not a compiled product. Audit logging is the closest analogue but at the wrong layer. \\[0.6em]
+
+3. Secure deployment and maintenance &
+\textbf{Gap}: no vulnerability disclosure process, no patching or update mechanism, no dependency risk review of \lstinline|requirements.txt|. Assumes a distributed product with an ongoing lifecycle, this project does not really have one. \\[0.6em]
+
+4. Communication with customers &
+\textbf{N/A}: no external customers, internal academy system. Stating plainly rather than forcing a mapping onto a theme that does not transfer. \\
+
+\end{longtable}
+\renewcommand{\arraystretch}{1.0}
+\normalsize
+
+\newpage
+%========================================
+\section*{Appendix}
+%========================================
+
+\subsection*{A.1 AI Tools}
+
+Helped me research SSCoP and understand it better.
+
+Struggled with wrappers and decorators, explained them through analogies.
+
+Formatted the report into latex.
+
+Helped debug and write test cases using pytest.
+
+Converted my iPad drawing into a Mermaid diagram.
+
+Helped write the README file.
+
+Helped write HTML code.
+
+Used for grammar, punctuation, and cutting the report down on words.
+
+\subsection*{A.2 Codebase Access Information}
+
+See \lstinline|README.md| in the project root for setup instructions.
+
+Github Link: \url{https://github.com/Syed-Imad/CCSE_FFA.git}
+
+\end{document}
